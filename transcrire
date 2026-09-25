@@ -114,7 +114,7 @@ for FICHIER in "$@"; do
   fi
 
   BASE="${FICHIER%.*}"
-  if ! "$WHISPER_CLI" -m "$MODEL_FILE" -f "$WAV" -l "$LANGUE" "${SORTIES[@]}" -of "$BASE" -np; then
+  if ! "$WHISPER_CLI" -m "$MODEL_FILE" -f "$WAV" -l "$LANGUE" "${SORTIES[@]}" -of "$BASE" -np -pp; then
     erreur "la transcription de $FICHIER a échoué"
     ECHECS=$((ECHECS + 1))
     continue

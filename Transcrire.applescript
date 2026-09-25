@@ -22,23 +22,48 @@ on transcrireFichiers(fichiers)
 	if langue is missing value then return
 
 	set total to count of fichiers
-	set progress total steps to total
+	set progress total steps to total * 100
 	set progress completed steps to 0
 	set progress description to "Transcription en cours…"
+
+	set dossierTemp to do shell script "mktemp -d"
+	set journal to quoted form of (dossierTemp & "/journal.txt")
+	set statut to quoted form of (dossierTemp & "/statut.txt")
 
 	set reussis to {}
 	set erreurs to {}
 	repeat with i from 1 to total
 		set chemin to POSIX path of (item i of fichiers)
-		set progress additional description to "Fichier " & i & " sur " & total & " : " & nomDe(chemin)
+		set nom to nomDe(chemin)
+		set etiquette to "Fichier " & i & " sur " & total & " : " & nom
+		set progress additional description to etiquette & " — préparation…"
+
+		-- Lance la transcription en arrière-plan pour pouvoir suivre sa progression
+		set pid to do shell script "rm -f " & statut & "; (export PATH=/opt/homebrew/bin:/usr/local/bin:$PATH; transcrire -l " & langue & " -f " & fmt & " " & quoted form of chemin & " > " & journal & " 2>&1; echo $? > " & statut & ") > /dev/null 2>&1 & echo $!"
 		try
-			do shell script "export PATH=/opt/homebrew/bin:/usr/local/bin:$PATH; transcrire -l " & langue & " -f " & fmt & " " & quoted form of chemin
-			set end of reussis to chemin
-		on error msg
-			set end of erreurs to nomDe(chemin) & " : " & msg
+			repeat
+				delay 1
+				if (do shell script "test -f " & statut & " && echo fini || echo encours") is "fini" then exit repeat
+				set pct to do shell script "grep -o 'progress = *[0-9]*' " & journal & " | tail -1 | grep -o '[0-9]*$' || true"
+				if pct is not "" then
+					set progress completed steps to (i - 1) * 100 + (pct as integer)
+					set progress additional description to etiquette & " — " & pct & " %"
+				end if
+			end repeat
+		on error number -128
+			-- Bouton « Arrêter » : on stoppe la transcription et ses sous-processus
+			do shell script "for p in $(pgrep -P " & pid & "); do pkill -P $p; kill $p; done; kill " & pid & "; rm -rf " & quoted form of dossierTemp & "; true"
+			return
 		end try
-		set progress completed steps to i
+
+		if (do shell script "cat " & statut) is "0" then
+			set end of reussis to chemin
+		else
+			set end of erreurs to nom & " : " & (do shell script "m=$(grep 'Erreur :' " & journal & " | tail -3); [ -n \"$m\" ] && echo \"$m\" || tail -3 " & journal)
+		end if
+		set progress completed steps to i * 100
 	end repeat
+	do shell script "rm -rf " & quoted form of dossierTemp
 
 	if (count of erreurs) > 0 then
 		set AppleScript's text item delimiters to return & return

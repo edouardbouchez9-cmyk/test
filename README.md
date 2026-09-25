@@ -22,7 +22,8 @@ Pour un modèle plus léger et plus rapide : `./install.sh small`.
 - **Glisse** un ou plusieurs fichiers audio/vidéo sur l'icône de Transcrire
   (dans le Dock ou le Finder), ou **double-clique** dessus pour les choisir.
 - Choisis le résultat voulu (texte, sous-titres ou les deux) et la langue.
-- Une barre de progression s'affiche. À la fin, clique sur **Ouvrir** pour lire
+- Une fenêtre affiche le pourcentage d'avancement (bouton **Arrêter** pour annuler).
+  Au tout début, la préparation et le chargement du modèle peuvent prendre un moment. À la fin, clique sur **Ouvrir** pour lire
   le texte, qui est enregistré à côté du fichier d'origine.
 
 ## Utilisation dans le Terminal
@@ -45,3 +46,9 @@ Tous les formats lisibles par ffmpeg sont acceptés : mp3, m4a, wav, mp4, mov, e
 Le fichier `~/.transcrire` enregistre l'emplacement de whisper.cpp et le modèle
 utilisé par défaut. Tu peux le modifier, ou passer `-m medium` ponctuellement.
 Un modèle absent est téléchargé automatiquement.
+
+## Mise à jour
+
+```bash
+cd ~/transcrire && ./mettre-a-jour.sh
+```
