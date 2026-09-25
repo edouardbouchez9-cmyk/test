@@ -6,6 +6,7 @@
 #   transcrire -f srt video.mp4          # sous-titres
 #   transcrire -l en podcast.mp3         # en anglais
 #   transcrire *.mp3                     # plusieurs fichiers
+#   transcrire -u cours-*.m4a            # tout regroupé dans un seul texte
 #   transcrire                           # demande de glisser un fichier
 
 set -uo pipefail
@@ -19,6 +20,8 @@ MODEL="${ENV_MODEL:-${WHISPER_MODEL:-large-v3-turbo}}"
 LANGUE="fr"
 FORMAT="txt"
 OUVRIR=0
+REGROUPER=0
+SEPARATEUR="transcription 10 min finit"
 
 aide() {
   cat <<EOF
@@ -32,6 +35,8 @@ Options :
   -m MODELE   modèle : large-v3-turbo (défaut), small, base, medium...
   -f FORMAT   txt (défaut), srt, vtt ou all
   -o          ouvrir le résultat une fois terminé
+  -u          plusieurs fichiers : tout regrouper dans un seul texte,
+              classé par nom, avec « $SEPARATEUR » entre chaque fichier
   -h          afficher cette aide
 
 Sans fichier, la commande te demande d'en glisser un dans le Terminal.
@@ -42,12 +47,13 @@ EOF
 if [ -t 2 ]; then ROUGE=$'\033[1;31m'; BLEU=$'\033[1;34m'; NORMAL=$'\033[0m'; else ROUGE=; BLEU=; NORMAL=; fi
 erreur() { printf '%sErreur :%s %s\n' "$ROUGE" "$NORMAL" "$*" >&2; }
 
-while getopts "l:m:f:oh" opt; do
+while getopts "l:m:f:ouh" opt; do
   case "$opt" in
     l) LANGUE="$OPTARG" ;;
     m) MODEL="$OPTARG" ;;
     f) FORMAT="$OPTARG" ;;
     o) OUVRIR=1 ;;
+    u) REGROUPER=1 ;;
     h) aide; exit 0 ;;
     *) aide >&2; exit 1 ;;
   esac
@@ -91,19 +97,32 @@ if [ $# -eq 0 ]; then
   set -- "$CHEMIN"
 fi
 
+# Regroupement : seulement pour plusieurs fichiers et une sortie texte
+[ "$REGROUPER" -eq 1 ] && [ $# -gt 1 ] && [ "$FORMAT" != "srt" ] && [ "$FORMAT" != "vtt" ] || REGROUPER=0
+if [ "$REGROUPER" -eq 1 ]; then
+  # Classement par nom, en ordre naturel (cours 2 avant cours 10)
+  if printf 'a\n' | sort -V >/dev/null 2>&1; then TRI=(sort -V); else TRI=(sort); fi
+  LISTE=()
+  while IFS= read -r LIGNE; do LISTE+=("$LIGNE"); done < <(printf '%s\n' "$@" | "${TRI[@]}")
+  set -- "${LISTE[@]}"
+  REGROUPE="${1%.*} - transcription complète.txt"
+fi
+
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 ECHECS=0
+BASES=()   # base de chaque fichier transcrit, vide en cas d'échec
 for FICHIER in "$@"; do
+  BASES+=("")
+  echo
+  printf '%s==>%s %s\n' "$BLEU" "$NORMAL" "$(basename "$FICHIER")"
+
   if [ ! -f "$FICHIER" ]; then
     erreur "fichier introuvable : $FICHIER"
     ECHECS=$((ECHECS + 1))
     continue
   fi
-
-  echo
-  printf '%s==>%s %s\n' "$BLEU" "$NORMAL" "$(basename "$FICHIER")"
 
   # whisper.cpp veut du WAV 16 kHz mono
   WAV="$TMP/audio.wav"
@@ -120,8 +139,34 @@ for FICHIER in "$@"; do
     continue
   fi
 
+  BASES[${#BASES[@]}-1]="$BASE"
+  [ "$REGROUPER" -eq 1 ] && continue
   for EXT in $EXTS; do echo "Enregistré : $BASE.$EXT"; done
   [ "$OUVRIR" -eq 1 ] && open "$BASE.${EXTS%% *}"
 done
+
+if [ "$REGROUPER" -eq 1 ]; then
+  I=0
+  for FICHIER in "$@"; do
+    BASE="${BASES[$I]}"
+    [ "$I" -gt 0 ] && printf '\n%s\n\n' "$SEPARATEUR"
+    if [ -n "$BASE" ]; then
+      cat "$BASE.txt"
+    else
+      echo "[$(basename "$FICHIER") : transcription impossible]"
+    fi
+    I=$((I + 1))
+  done > "$REGROUPE"
+
+  # En mode texte seul, les textes individuels ne servent plus
+  for BASE in "${BASES[@]}"; do
+    if [ -n "$BASE" ]; then
+      if [ "$FORMAT" = "txt" ]; then rm -f "$BASE.txt"; else echo "Enregistré : $BASE.txt, .srt, .vtt"; fi
+    fi
+  done
+  echo
+  echo "Regroupé : $REGROUPE"
+  [ "$OUVRIR" -eq 1 ] && open "$REGROUPE"
+fi
 
 exit $((ECHECS > 0))

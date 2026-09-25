@@ -22,6 +22,9 @@ Pour un modèle plus léger et plus rapide : `./install.sh small`.
 - **Glisse** un ou plusieurs fichiers audio/vidéo sur l'icône de Transcrire
   (dans le Dock ou le Finder), ou **double-clique** dessus pour les choisir.
 - Choisis le résultat voulu (texte, sous-titres ou les deux) et la langue.
+- **Plusieurs fichiers d'un coup** : tout est regroupé dans un seul texte
+  `<premier fichier> - transcription complète.txt`, classé par nom (Cours 2 avant
+  Cours 10), avec la ligne « transcription 10 min finit » entre chaque fichier.
 - Une fenêtre affiche le pourcentage d'avancement (bouton **Arrêter** pour annuler).
   Au tout début, la préparation et le chargement du modèle peuvent prendre un moment. À la fin, clique sur **Ouvrir** pour lire
   le texte, qui est enregistré à côté du fichier d'origine.
@@ -35,6 +38,7 @@ transcrire -f all reunion.mp3       # .txt + .srt + .vtt
 transcrire -l en podcast.mp3        # audio en anglais (ou -l auto)
 transcrire -o note.m4a              # ouvre le texte une fois fini
 transcrire *.mp3                    # plusieurs fichiers d'un coup
+transcrire -u cours-*.m4a           # tout regroupé dans un seul texte
 transcrire                          # puis glisse un fichier dans le Terminal
 ```
 

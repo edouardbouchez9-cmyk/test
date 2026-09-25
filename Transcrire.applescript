@@ -22,71 +22,82 @@ on transcrireFichiers(fichiers)
 	if langue is missing value then return
 
 	set total to count of fichiers
+	set arguments to ""
+	repeat with f in fichiers
+		set arguments to arguments & " " & quoted form of (POSIX path of f)
+	end repeat
 	set progress total steps to total * 100
 	set progress completed steps to 0
 	set progress description to "Transcription en cours…"
+	set progress additional description to "Préparation…"
 
 	set dossierTemp to do shell script "mktemp -d"
 	set journal to quoted form of (dossierTemp & "/journal.txt")
 	set statut to quoted form of (dossierTemp & "/statut.txt")
 
-	set reussis to {}
-	set erreurs to {}
-	repeat with i from 1 to total
-		set chemin to POSIX path of (item i of fichiers)
-		set nom to nomDe(chemin)
-		set etiquette to "Fichier " & i & " sur " & total & " : " & nom
-		set progress additional description to etiquette & " — préparation…"
+	-- Lance la transcription en arrière-plan pour pouvoir suivre sa progression.
+	-- -u : plusieurs fichiers sont regroupés dans un seul texte, classés par nom.
+	set pid to do shell script "(export PATH=/opt/homebrew/bin:/usr/local/bin:$PATH; transcrire -u -l " & langue & " -f " & fmt & arguments & " > " & journal & " 2>&1; echo $? > " & statut & ") > /dev/null 2>&1 & echo $!"
+	try
+		repeat
+			delay 1
+			if (do shell script "test -f " & statut & " && echo fini || echo encours") is "fini" then exit repeat
+			-- « numéro pourcentage nom » du fichier en cours
+			set etat to do shell script "awk '/^==> /{n++; p=0; nom=substr($0,5)} /progress = /{p=$NF+0} END{print n+0, p+0, nom}' " & journal
+			set AppleScript's text item delimiters to " "
+			set morceaux to text items of etat
+			set n to (item 1 of morceaux) as integer
+			set pct to (item 2 of morceaux) as integer
+			set nom to (items 3 thru -1 of morceaux) as text
+			set AppleScript's text item delimiters to ""
+			if n > 0 then
+				set progress completed steps to (n - 1) * 100 + pct
+				set progress additional description to "Fichier " & n & " sur " & total & " : " & nom & " — " & pct & " %"
+			end if
+		end repeat
+	on error number -128
+		-- Bouton « Arrêter » : on stoppe la transcription et ses sous-processus
+		do shell script "for p in $(pgrep -P " & pid & "); do pkill -P $p; kill $p; done; kill " & pid & "; rm -rf " & quoted form of dossierTemp & "; true"
+		return
+	end try
+	set progress completed steps to total * 100
 
-		-- Lance la transcription en arrière-plan pour pouvoir suivre sa progression
-		set pid to do shell script "rm -f " & statut & "; (export PATH=/opt/homebrew/bin:/usr/local/bin:$PATH; transcrire -l " & langue & " -f " & fmt & " " & quoted form of chemin & " > " & journal & " 2>&1; echo $? > " & statut & ") > /dev/null 2>&1 & echo $!"
-		try
-			repeat
-				delay 1
-				if (do shell script "test -f " & statut & " && echo fini || echo encours") is "fini" then exit repeat
-				set pct to do shell script "grep -o 'progress = *[0-9]*' " & journal & " | tail -1 | grep -o '[0-9]*$' || true"
-				if pct is not "" then
-					set progress completed steps to (i - 1) * 100 + (pct as integer)
-					set progress additional description to etiquette & " — " & pct & " %"
-				end if
-			end repeat
-		on error number -128
-			-- Bouton « Arrêter » : on stoppe la transcription et ses sous-processus
-			do shell script "for p in $(pgrep -P " & pid & "); do pkill -P $p; kill $p; done; kill " & pid & "; rm -rf " & quoted form of dossierTemp & "; true"
-			return
-		end try
-
-		if (do shell script "cat " & statut) is "0" then
-			set end of reussis to chemin
-		else
-			set end of erreurs to nom & " : " & (do shell script "m=$(grep 'Erreur :' " & journal & " | tail -3); [ -n \"$m\" ] && echo \"$m\" || tail -3 " & journal)
-		end if
-		set progress completed steps to i * 100
-	end repeat
+	set code to do shell script "cat " & statut
+	set texteErreurs to do shell script "grep 'Erreur :' " & journal & " || true"
+	if code is not "0" and texteErreurs is "" then set texteErreurs to do shell script "tail -3 " & journal
+	set regroupe to do shell script "sed -n 's/^Regroupé : //p' " & journal
+	if fmt is "srt" then
+		set ext to "srt"
+	else
+		set ext to "txt"
+	end if
+	if regroupe is not "" then
+		set resultats to {regroupe}
+	else
+		set resultats to paragraphs of (do shell script "sed -n 's/^Enregistré : //p' " & journal & " | grep '\\." & ext & "$' || true")
+	end if
 	do shell script "rm -rf " & quoted form of dossierTemp
 
-	if (count of erreurs) > 0 then
-		set AppleScript's text item delimiters to return & return
-		set texteErreurs to erreurs as text
-		set AppleScript's text item delimiters to ""
-		if texteErreurs contains "transcrire: command not found" or texteErreurs contains "whisper-cli introuvable" then
+	if texteErreurs is not "" then
+		if texteErreurs contains "command not found" or texteErreurs contains "whisper-cli introuvable" then
 			set texteErreurs to "whisper.cpp n'est pas installé. Ouvre le Terminal dans le dossier du projet et lance ./install.sh"
 		end if
 		display dialog "Certains fichiers n'ont pas pu être transcrits :" & return & return & texteErreurs buttons {"OK"} default button 1 with icon caution with title "Transcrire"
 	end if
 
-	if (count of reussis) > 0 then
-		if fmt is "srt" then
-			set ext to "srt"
+	if (count of resultats) > 0 and item 1 of resultats is not "" then
+		if regroupe is not "" then
+			set message to "Terminé ! Tout est regroupé dans :" & return & nomDe(regroupe)
 		else
-			set ext to "txt"
+			set message to "Terminé ! " & (count of resultats) & " fichier(s) transcrit(s)." & return & "Le résultat est enregistré à côté de chaque fichier d'origine."
 		end if
-		set reponse to display dialog "Terminé ! " & (count of reussis) & " fichier(s) transcrit(s)." & return & "Le résultat est enregistré à côté de chaque fichier d'origine." buttons {"OK", "Afficher dans le Finder", "Ouvrir"} default button "Ouvrir" with title "Transcrire"
-		set bouton to button returned of reponse
-		repeat with chemin in reussis
-			set resultat to "f=" & quoted form of (chemin as text) & "; open "
-			if bouton is "Afficher dans le Finder" then set resultat to resultat & "-R "
-			if bouton is not "OK" then do shell script resultat & "\"${f%.*}." & ext & "\""
+		set bouton to button returned of (display dialog message buttons {"OK", "Afficher dans le Finder", "Ouvrir"} default button "Ouvrir" with title "Transcrire")
+		repeat with resultat in resultats
+			if bouton is "Ouvrir" then
+				do shell script "open " & quoted form of (resultat as text)
+			else if bouton is "Afficher dans le Finder" then
+				do shell script "open -R " & quoted form of (resultat as text)
+			end if
 		end repeat
 	end if
 end transcrireFichiers
