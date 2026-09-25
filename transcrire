@@ -1,0 +1,125 @@
+#!/bin/bash
+# transcrire : transcrit un fichier audio ou vidéo avec whisper.cpp.
+#
+# Exemples :
+#   transcrire interview.m4a
+#   transcrire -f srt video.mp4          # sous-titres
+#   transcrire -l en podcast.mp3         # en anglais
+#   transcrire *.mp3                     # plusieurs fichiers
+#   transcrire                           # demande de glisser un fichier
+
+set -uo pipefail
+
+# Réglages : variable d'environnement > ~/.transcrire > valeur par défaut
+ENV_DIR="${WHISPER_DIR:-}"
+ENV_MODEL="${WHISPER_MODEL:-}"
+[ -f "$HOME/.transcrire" ] && . "$HOME/.transcrire"
+WHISPER_DIR="${ENV_DIR:-${WHISPER_DIR:-$HOME/whisper.cpp}}"
+MODEL="${ENV_MODEL:-${WHISPER_MODEL:-large-v3-turbo}}"
+LANGUE="fr"
+FORMAT="txt"
+OUVRIR=0
+
+aide() {
+  cat <<EOF
+Usage : transcrire [options] fichier [fichier...]
+
+Transcrit des fichiers audio ou vidéo (mp3, m4a, wav, mp4, mov...).
+Le texte est enregistré à côté du fichier d'origine.
+
+Options :
+  -l LANGUE   langue parlée : fr (défaut), en, es, de... ou auto
+  -m MODELE   modèle : large-v3-turbo (défaut), small, base, medium...
+  -f FORMAT   txt (défaut), srt, vtt ou all
+  -o          ouvrir le résultat une fois terminé
+  -h          afficher cette aide
+
+Sans fichier, la commande te demande d'en glisser un dans le Terminal.
+EOF
+}
+
+erreur() { printf '\033[1;31mErreur :\033[0m %s\n' "$*" >&2; }
+
+while getopts "l:m:f:oh" opt; do
+  case "$opt" in
+    l) LANGUE="$OPTARG" ;;
+    m) MODEL="$OPTARG" ;;
+    f) FORMAT="$OPTARG" ;;
+    o) OUVRIR=1 ;;
+    h) aide; exit 0 ;;
+    *) aide >&2; exit 1 ;;
+  esac
+done
+shift $((OPTIND - 1))
+
+case "$FORMAT" in
+  txt|srt|vtt) EXTS="$FORMAT" ;;
+  all) EXTS="txt srt vtt" ;;
+  *) erreur "format inconnu : $FORMAT (txt, srt, vtt ou all)"; exit 1 ;;
+esac
+SORTIES=()
+for EXT in $EXTS; do SORTIES+=("-o$EXT"); done
+
+WHISPER_CLI="$WHISPER_DIR/build/bin/whisper-cli"
+MODEL_FILE="$WHISPER_DIR/models/ggml-$MODEL.bin"
+
+if [ ! -x "$WHISPER_CLI" ]; then
+  erreur "whisper-cli introuvable dans $WHISPER_DIR. Lance d'abord ./install.sh"
+  exit 1
+fi
+if ! command -v ffmpeg >/dev/null 2>&1; then
+  erreur "ffmpeg n'est pas installé : brew install ffmpeg"
+  exit 1
+fi
+if [ ! -f "$MODEL_FILE" ]; then
+  echo "Le modèle $MODEL n'est pas encore téléchargé, téléchargement..."
+  sh "$WHISPER_DIR/models/download-ggml-model.sh" "$MODEL" || exit 1
+fi
+
+# Aucun fichier donné : on demande d'en glisser un
+if [ $# -eq 0 ]; then
+  printf "Glisse un fichier audio/vidéo ici, puis appuie sur Entrée :\n> "
+  read -r CHEMIN
+  # Le Terminal échappe les espaces (« Mon\ fichier.mp3 ») ou ajoute des guillemets
+  CHEMIN="${CHEMIN%"${CHEMIN##*[![:space:]]}"}"
+  CHEMIN="${CHEMIN//\\/}"
+  CHEMIN="${CHEMIN#\'}"; CHEMIN="${CHEMIN%\'}"
+  CHEMIN="${CHEMIN#\"}"; CHEMIN="${CHEMIN%\"}"
+  [ -n "$CHEMIN" ] || { erreur "aucun fichier."; exit 1; }
+  set -- "$CHEMIN"
+fi
+
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+
+ECHECS=0
+for FICHIER in "$@"; do
+  if [ ! -f "$FICHIER" ]; then
+    erreur "fichier introuvable : $FICHIER"
+    ECHECS=$((ECHECS + 1))
+    continue
+  fi
+
+  echo
+  printf '\033[1;34m==>\033[0m %s\n' "$(basename "$FICHIER")"
+
+  # whisper.cpp veut du WAV 16 kHz mono
+  WAV="$TMP/audio.wav"
+  if ! ffmpeg -nostdin -loglevel error -y -i "$FICHIER" -ar 16000 -ac 1 -c:a pcm_s16le "$WAV"; then
+    erreur "impossible de lire l'audio de $FICHIER"
+    ECHECS=$((ECHECS + 1))
+    continue
+  fi
+
+  BASE="${FICHIER%.*}"
+  if ! "$WHISPER_CLI" -m "$MODEL_FILE" -f "$WAV" -l "$LANGUE" "${SORTIES[@]}" -of "$BASE" -np; then
+    erreur "la transcription de $FICHIER a échoué"
+    ECHECS=$((ECHECS + 1))
+    continue
+  fi
+
+  for EXT in $EXTS; do echo "Enregistré : $BASE.$EXT"; done
+  [ "$OUVRIR" -eq 1 ] && open "$BASE.${EXTS%% *}"
+done
+
+exit $((ECHECS > 0))
