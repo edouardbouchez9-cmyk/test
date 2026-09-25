@@ -5,7 +5,7 @@ Transcris n'importe quel fichier audio ou vidéo en texte, en local, sur ton Mac
 ## Installation (une seule fois)
 
 ```bash
-git clone https://github.com/edouardbouchez9-cmyk/test.git ~/transcrire
+git clone -b claude/compassionate-wright-pspsc2 https://github.com/edouardbouchez9-cmyk/test.git ~/transcrire
 cd ~/transcrire
 ./install.sh
 ```
