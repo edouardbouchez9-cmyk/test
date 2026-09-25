@@ -1,6 +1,7 @@
-# transcrire : whisper.cpp en une commande sur Mac
+# Transcrire : whisper.cpp en une app sur Mac
 
 Transcris n'importe quel fichier audio ou vidéo en texte, en local, sur ton Mac.
+Aucune donnée n'est envoyée sur internet.
 
 ## Installation (une seule fois)
 
@@ -11,12 +12,20 @@ cd ~/transcrire
 ```
 
 Le script installe tout ce qu'il faut : outils Xcode, Homebrew, cmake, ffmpeg,
-whisper.cpp (compilé avec Metal) et le modèle `large-v3-turbo`, puis ajoute la
-commande `transcrire`.
+whisper.cpp (compilé avec Metal) et le modèle `large-v3-turbo`, puis crée
+l'application **Transcrire** dans `/Applications` et la commande `transcrire`.
 
 Pour un modèle plus léger et plus rapide : `./install.sh small`.
 
-## Utilisation
+## Utilisation de l'app
+
+- **Glisse** un ou plusieurs fichiers audio/vidéo sur l'icône de Transcrire
+  (dans le Dock ou le Finder), ou **double-clique** dessus pour les choisir.
+- Choisis le résultat voulu (texte, sous-titres ou les deux) et la langue.
+- Une barre de progression s'affiche. À la fin, clique sur **Ouvrir** pour lire
+  le texte, qui est enregistré à côté du fichier d'origine.
+
+## Utilisation dans le Terminal
 
 ```bash
 transcrire interview.m4a            # crée interview.txt à côté du fichier

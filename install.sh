@@ -67,7 +67,16 @@ install -m 755 "$SCRIPT_DIR/transcrire" "$BIN_DIR/transcrire"
 # Mémorise l'emplacement et le modèle choisis
 printf 'WHISPER_DIR="%s"\nWHISPER_MODEL="%s"\n' "$WHISPER_DIR" "$MODEL" > "$HOME/.transcrire"
 
+# 8. Application « Transcrire » (fabriquée ici, donc pas bloquée par Gatekeeper)
+APP_DIR="/Applications"
+[ -w "$APP_DIR" ] || { APP_DIR="$HOME/Applications"; mkdir -p "$APP_DIR"; }
+info "Création de l'application Transcrire dans $APP_DIR..."
+rm -rf "$APP_DIR/Transcrire.app"
+osacompile -o "$APP_DIR/Transcrire.app" "$SCRIPT_DIR/Transcrire.applescript"
+
 echo
-info "Terminé ! Essaie :"
-echo "    transcrire ~/Desktop/mon_audio.mp3"
-echo "ou tape simplement « transcrire » et glisse un fichier dans le Terminal."
+info "Terminé !"
+echo "  • Ouvre « Transcrire » depuis le Launchpad ou le dossier $APP_DIR,"
+echo "    ou glisse des fichiers audio/vidéo sur son icône (pense à la mettre dans le Dock)."
+echo "  • Dans le Terminal : transcrire ~/Desktop/mon_audio.mp3"
+open -R "$APP_DIR/Transcrire.app"

@@ -38,7 +38,9 @@ Sans fichier, la commande te demande d'en glisser un dans le Terminal.
 EOF
 }
 
-erreur() { printf '\033[1;31mErreur :\033[0m %s\n' "$*" >&2; }
+# Couleurs seulement dans un Terminal (pas dans Transcrire.app)
+if [ -t 2 ]; then ROUGE=$'\033[1;31m'; BLEU=$'\033[1;34m'; NORMAL=$'\033[0m'; else ROUGE=; BLEU=; NORMAL=; fi
+erreur() { printf '%sErreur :%s %s\n' "$ROUGE" "$NORMAL" "$*" >&2; }
 
 while getopts "l:m:f:oh" opt; do
   case "$opt" in
@@ -101,7 +103,7 @@ for FICHIER in "$@"; do
   fi
 
   echo
-  printf '\033[1;34m==>\033[0m %s\n' "$(basename "$FICHIER")"
+  printf '%s==>%s %s\n' "$BLEU" "$NORMAL" "$(basename "$FICHIER")"
 
   # whisper.cpp veut du WAV 16 kHz mono
   WAV="$TMP/audio.wav"
