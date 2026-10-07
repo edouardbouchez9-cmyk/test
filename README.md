@@ -29,6 +29,18 @@ Pour un modèle plus léger et plus rapide : `./install.sh small`.
   Au tout début, la préparation et le chargement du modèle peuvent prendre un moment. À la fin, clique sur **Ouvrir** pour lire
   le texte, qui est enregistré à côté du fichier d'origine.
 
+## Découper un long audio
+
+L'app **Découper** coupe un audio ou une vidéo en tranches (10 min par défaut,
+ou 5, 15, 20, 30 min) : glisse le fichier sur son icône, choisis la durée.
+Les tranches sont rangées dans un dossier `<nom> - tranches` à côté du fichier,
+nommées `<nom> - partie 01`, `partie 02`... C'est instantané et sans perte.
+
+Tu peux ensuite glisser toutes les tranches sur **Transcrire** : elles sont
+transcrites dans l'ordre et regroupées dans un seul texte.
+
+Dans le Terminal : `decouper cours.m4a` ou `decouper -d 5 cours.m4a`.
+
 ## Utilisation dans le Terminal
 
 ```bash

@@ -1,0 +1,72 @@
+#!/bin/bash
+# decouper : coupe un audio (ou une vidéo) en tranches de durée fixe, sans perte.
+#
+# Exemples :
+#   decouper cours.m4a              # tranches de 10 min
+#   decouper -d 5 cours.m4a         # tranches de 5 min
+#
+# Les tranches sont rangées dans un dossier « <nom> - tranches » à côté du
+# fichier : « <nom> - partie 01.m4a », « <nom> - partie 02.m4a »...
+
+set -uo pipefail
+
+MINUTES=10
+
+aide() {
+  cat <<EOF
+Usage : decouper [-d minutes] fichier [fichier...]
+
+Coupe chaque fichier en tranches de $MINUTES minutes (ou la durée donnée avec -d),
+sans réencodage : c'est instantané et sans perte de qualité.
+EOF
+}
+
+if [ -t 2 ]; then ROUGE=$'\033[1;31m'; NORMAL=$'\033[0m'; else ROUGE=; NORMAL=; fi
+erreur() { printf '%sErreur :%s %s\n' "$ROUGE" "$NORMAL" "$*" >&2; }
+
+while getopts "d:h" opt; do
+  case "$opt" in
+    d) MINUTES="$OPTARG" ;;
+    h) aide; exit 0 ;;
+    *) aide >&2; exit 1 ;;
+  esac
+done
+shift $((OPTIND - 1))
+
+case "$MINUTES" in
+  ''|*[!0-9]*|0) erreur "durée invalide : $MINUTES (nombre de minutes)"; exit 1 ;;
+esac
+[ $# -gt 0 ] || { aide >&2; exit 1; }
+command -v ffmpeg >/dev/null 2>&1 || { erreur "ffmpeg n'est pas installé : brew install ffmpeg"; exit 1; }
+
+ECHECS=0
+for FICHIER in "$@"; do
+  if [ ! -f "$FICHIER" ]; then
+    erreur "fichier introuvable : $FICHIER"
+    ECHECS=$((ECHECS + 1))
+    continue
+  fi
+
+  NOM="$(basename "${FICHIER%.*}")"
+  EXT="${FICHIER##*.}"
+  DOSSIER="$(dirname "$FICHIER")/$NOM - tranches"
+  mkdir -p "$DOSSIER"
+
+  # Pour un audio, on ne garde que le son (évite les soucis de pochette)
+  case "$(printf '%s' "$EXT" | tr '[:upper:]' '[:lower:]')" in
+    mp4|mov|m4v|mkv|avi|webm) FLUX=() ;;
+    *) FLUX=(-map 0:a) ;;
+  esac
+
+  echo "==> $(basename "$FICHIER")"
+  if ffmpeg -nostdin -loglevel error -y -i "$FICHIER" ${FLUX[@]+"${FLUX[@]}"} -c copy \
+      -f segment -segment_time $((MINUTES * 60)) -segment_start_number 1 -reset_timestamps 1 \
+      "$DOSSIER/$NOM - partie %02d.$EXT"; then
+    echo "Dossier : $DOSSIER"
+  else
+    erreur "impossible de découper $FICHIER"
+    ECHECS=$((ECHECS + 1))
+  fi
+done
+
+exit $((ECHECS > 0))

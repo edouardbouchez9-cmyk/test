@@ -59,24 +59,26 @@ else
   sh "$WHISPER_DIR/models/download-ggml-model.sh" "$MODEL"
 fi
 
-# 7. Commande « transcrire »
+# 7. Commandes « transcrire » et « decouper »
 BIN_DIR="$(brew --prefix)/bin"
-info "Installation de la commande transcrire dans $BIN_DIR..."
-install -m 755 "$SCRIPT_DIR/transcrire" "$BIN_DIR/transcrire"
+info "Installation des commandes transcrire et decouper dans $BIN_DIR..."
+install -m 755 "$SCRIPT_DIR/transcrire" "$SCRIPT_DIR/decouper" "$BIN_DIR/"
 
 # Mémorise l'emplacement et le modèle choisis
 printf 'WHISPER_DIR="%s"\nWHISPER_MODEL="%s"\n' "$WHISPER_DIR" "$MODEL" > "$HOME/.transcrire"
 
-# 8. Application « Transcrire » (fabriquée ici, donc pas bloquée par Gatekeeper)
+# 8. Applications « Transcrire » et « Découper » (fabriquées ici, donc pas bloquées par Gatekeeper)
 APP_DIR="/Applications"
 [ -w "$APP_DIR" ] || { APP_DIR="$HOME/Applications"; mkdir -p "$APP_DIR"; }
-info "Création de l'application Transcrire dans $APP_DIR..."
-rm -rf "$APP_DIR/Transcrire.app"
+info "Création des applications Transcrire et Découper dans $APP_DIR..."
+rm -rf "$APP_DIR/Transcrire.app" "$APP_DIR/Découper.app"
 osacompile -o "$APP_DIR/Transcrire.app" "$SCRIPT_DIR/Transcrire.applescript"
+osacompile -o "$APP_DIR/Découper.app" "$SCRIPT_DIR/Decouper.applescript"
 
 echo
 info "Terminé !"
 echo "  • Ouvre « Transcrire » depuis le Launchpad ou le dossier $APP_DIR,"
 echo "    ou glisse des fichiers audio/vidéo sur son icône (pense à la mettre dans le Dock)."
+echo "  • « Découper » coupe un long audio en tranches de 10 min."
 echo "  • Dans le Terminal : transcrire ~/Desktop/mon_audio.mp3"
 open -R "$APP_DIR/Transcrire.app"
